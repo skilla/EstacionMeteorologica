@@ -22,8 +22,8 @@
 //    #include <HTTPClient.h>
 #endif
 
-const char* ssid = "JAZZTEL_GYN7";
-const char* password = "rmbjdy4n7cft";
+const char* ssid = "xxx";
+const char* password = "xxx";
 
 RTC_DS3231 rtc;
 DFRobot_SHT20 sht20;
