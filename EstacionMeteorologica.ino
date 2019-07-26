@@ -1,5 +1,10 @@
+const char* token = "YOUR TOKEN";
+const char* ssid = "YOUR WIFI";
+const char* password = "YOUR WIFI PASSWORD";
+
 #define ARDUINO_IDE
 #define LANGUAGE es
+#define DOWN 18
 
 #include "src/Translations/es_ES.h"
 //#include "src/Translations/ca_ES.h"
@@ -8,28 +13,26 @@
     #include </Users/sergio.zambrano/Documents/Arduino/libraries/DFRobot_SHT20-master/DFRobot_SHT20.h>
     #include </Users/sergio.zambrano/Documents/Arduino/libraries/Adafruit_VEML6075_Library/Adafruit_VEML6075.h>
     #include </Users/sergio.zambrano/Documents/Arduino/libraries/Adafruit_BMP280_Library/Adafruit_BMP280.h>
+    #include </Users/sergio.zambrano/Library/Arduino15/packages/esp32/hardware/esp32/1.0.2/libraries/WiFi/src/WiFi.h>
+    #include </Users/sergio.zambrano/Library/Arduino15/packages/esp32/hardware/esp32/1.0.2/libraries/HTTPClient/src/HTTPClient.h>
     #include </Users/sergio.zambrano/Library/Arduino15/packages/esp32/hardware/esp32/1.0.2/libraries/BluetoothSerial/src/BluetoothSerial.h>
-//    #include </Users/sergio.zambrano/Library/Arduino15/packages/esp32/hardware/esp32/1.0.2/libraries/WiFi/src/WiFi.h>
-//    #include </Users/sergio.zambrano/Library/Arduino15/packages/esp32/hardware/esp32/1.0.2/libraries/HTTPClient/src/HTTPClient.h>
 #endif
 #ifdef ARDUINO_IDE
     #include <RTClib.h>
     #include <DFRobot_SHT20.h>
     #include <Adafruit_VEML6075.h>
     #include <Adafruit_BMP280.h>
+    #include <WiFi.h>
+    #include <HTTPClient.h>
     #include "BluetoothSerial.h"
-//    #include <WiFi.h>
-//    #include <HTTPClient.h>
 #endif
-
-const char* ssid = "xxx";
-const char* password = "xxx";
 
 RTC_DS3231 rtc;
 DFRobot_SHT20 sht20;
 Adafruit_VEML6075 uv = Adafruit_VEML6075();
 Adafruit_BMP280 bmp;
 BluetoothSerial Bluetooth;
+long cycle = 0;
 
 bool hasRtc = false;
 bool hasHumidity = false;
@@ -50,6 +53,7 @@ float temperature2;
 void setup() {
     Serial.begin(115200);
     pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(DOWN, INPUT_PULLUP);
 
     if (rtc.begin()) {
         hasRtc = true;
@@ -90,8 +94,8 @@ void setup() {
                         Adafruit_BMP280::STANDBY_MS_500); /* Standby time. */
     }
 
+    WiFi.begin(ssid, password);
     Bluetooth.begin("Estacion_meteorologica");
-//    WiFi.begin(ssid, password);
 }
 
 void readSensors()
@@ -195,35 +199,89 @@ void printSerialData()
     }
 }
 
-//void printToEndpoint()
-//{
-//    if ((WiFi.status() != WL_CONNECTED)) {
-//        Serial.println("Wifi not connected");
-//        return;
-//    }
-//
-//    HTTPClient http;
-//    http.begin("https://api.thingspeak.com/update?api_key=YX51WM8HB6G7IH0N&field1=0&field2=0&field3=0&field4=0&field5=0&field6=0&field7=0&field8=0");
-//    Serial.println("Wifi data send");
-//
-//    int httpCode = http.GET();
-//    if (httpCode > 0) {
-//        String payload = http.getString();
-//        Serial.println(httpCode);
-//        Serial.println(payload);
-//    } else {
-//        Serial.println("Error on HTTP request");
-//    }
-//
-//    http.end();
-//}
+void printWifiData()
+{
+    if ((WiFi.status() != WL_CONNECTED)) {
+        Serial.println("wifi not connected");
+        return;
+    }
+
+    String url = "https://api.thingspeak.com/update?api_key=" + token;
+    char texto[20];
+
+    sprintf(texto, "&field1=%0.2f", humidity);
+    url = url + texto;
+    sprintf(texto, "&field2=%0.2f", temperature1);
+    url = url + texto;
+    sprintf(texto, "&field3=%0.2f", uva);
+    url = url + texto;
+    sprintf(texto, "&field4=%0.2f", uvb);
+    url = url + texto;
+    sprintf(texto, "&field5=%0.2f", uvi);
+    url = url + texto;
+    sprintf(texto, "&field6=%0.2f", temperature2);
+    url = url + texto;
+    sprintf(texto, "&field7=%0.2f", pressure);
+    url = url + texto;
+    sprintf(texto, "&field8=%0.2f", altitude);
+    url = url + texto;
+
+    HTTPClient http;
+    http.begin(url);
+
+    int httpCode = http.GET();
+    if (httpCode > 0) {
+        String payload = http.getString();
+    }
+
+    http.end();
+}
+
+void printBluetoothData()
+{
+    Bluetooth.print("Temperature1: ");
+    Bluetooth.print(temperature1);
+    Bluetooth.println(" grados");
+    Bluetooth.print("Temperature2: ");
+    Bluetooth.print(temperature2);
+    Bluetooth.println(" grados");
+    Bluetooth.print("Humidity:     ");
+    Bluetooth.print(humidity);
+    Bluetooth.println(" %");
+    Bluetooth.print("UVA:          ");
+    Bluetooth.print(uva);
+    Bluetooth.println();
+    Bluetooth.print("UVB:          ");
+    Bluetooth.print(uvb);
+    Bluetooth.println();
+    Bluetooth.print("UVI:          ");
+    Bluetooth.print(uvi);
+    Bluetooth.println();
+    Bluetooth.print("Pression:     ");
+    Bluetooth.print(pressure);
+    Bluetooth.println(" Pa");
+    Bluetooth.print("Altitude:     ");
+    Bluetooth.print(altitude);
+    Bluetooth.println(" metros");
+    Bluetooth.println();
+}
 
 void loop()
 {
-    delay(3000);
-    digitalWrite(LED_BUILTIN, HIGH);
-    readSensors();
-    printSerialData();
-    Serial.println();
-    digitalWrite(LED_BUILTIN, LOW);
+    delay(1000);
+    cycle++;
+    if (cycle % 3 == 0) {
+      digitalWrite(LED_BUILTIN, HIGH);
+      readSensors();
+      printSerialData();
+      printBluetoothData();
+      Serial.println();
+      digitalWrite(LED_BUILTIN, LOW);
+    }
+    if (cycle % 20 == 0) {
+      Serial.println("wifi data");
+      digitalWrite(LED_BUILTIN, HIGH);
+      printWifiData();
+      digitalWrite(LED_BUILTIN, LOW);
+    }
 }
